@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Listing Photo Processor</title>
+<style>
+  :root {
+    --ink: #1c2521;
+    --paper: #f6f4ee;
+    --line: #d8d3c4;
+    --brass: #8a6d3b;
+    --brass-deep: #6b5228;
+    --slate: #4a5a55;
+    --ok: #3f6b4f;
+    --err: #a3402f;
+    --field-bg: #ffffff;
+    --card-shadow: none;
+    --transition-theme: background 0.5s ease, color 0.4s ease, border-color 0.4s ease;
+  }
+
+  html[data-theme="dark"] {
+    --ink: #e9e6da;
+    --paper: #0d1117;
+    --line: #232b36;
+    --brass: #d9a84e;
+    --brass-deep: #f0c169;
+    --slate: #8b95a3;
+    --ok: #6fbf8b;
+    --err: #e0715c;
+    --field-bg: #131a24;
+    --card-shadow: 0 0 60px rgba(217, 168, 78, 0.05);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    transition: var(--transition-theme);
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    position: relative;
+    overflow-x: hidden;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+  }
+
+  html[data-theme="dark"] body {
+    background-image:
+      radial-gradient(ellipse at 20% -10%, rgba(217, 168, 78, 0.07), transparent 55%),
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: auto, 28px 28px, 28px 28px;
+  }
+
+  #starfield {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  html[data-theme="dark"] #starfield { opacity: 1; }
+
+  .star {
+    position: absolute;
+    background: #f4ecd8;
+    border-radius: 50%;
+    animation: twinkle var(--dur, 3.5s) ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+  }
+
+  .star.shoot {
+    background: linear-gradient(90deg, rgba(244,236,216,0) 0%, #f4ecd8 80%, #ffffff 100%);
+    height: 1.5px;
+    border-radius: 2px;
+    animation: shoot 7s linear infinite;
+    animation-delay: var(--delay, 0s);
+    opacity: 0;
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: var(--min-op, 0.15); transform: scale(0.85); }
+    50% { opacity: var(--max-op, 0.9); transform: scale(1); }
+  }
+
+  @keyframes shoot {
+    0% { opacity: 0; transform: translate(0, 0); }
+    2% { opacity: 1; }
+    12% { opacity: 0; transform: translate(220px, 130px); }
+    100% { opacity: 0; transform: translate(220px, 130px); }
+  }
+
+  .theme-toggle {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 10;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-theme), transform 0.2s ease;
+    box-shadow: var(--card-shadow);
+  }
+  .theme-toggle:hover { transform: rotate(-12deg) scale(1.06); }
+  .theme-toggle svg { width: 20px; height: 20px; stroke: var(--ink); transition: stroke 0.4s ease; }
+
+  .card {
+    width: 100%;
+    max-width: 560px;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    position: relative;
+    padding: 48px 44px 40px;
+    z-index: 1;
+    transition: var(--transition-theme);
+    box-shadow: var(--card-shadow);
+  }
+
+  .card::before {
+    content: "";
+    position: absolute;
+    top: 8px; left: 8px; right: 8px; bottom: 8px;
+    border: 1px solid var(--line);
+    pointer-events: none;
+  }
+
+  .eyebrow {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brass-deep);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-size: 30px;
+    font-weight: 400;
+    line-height: 1.15;
+    margin: 0 0 10px;
+    letter-spacing: 0.01em;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--brass-deep);
+  }
+
+  .sub {
+    font-size: 15px;
+    color: var(--slate);
+    line-height: 1.55;
+    margin: 0 0 34px;
+    max-width: 44ch;
+  }
+
+  .stages {
+    display: flex;
+    gap: 0;
+    margin-bottom: 30px;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .stage {
+    flex: 1;
+    padding: 10px 6px;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--slate);
+    border-right: 1px solid var(--line);
+    transition: color 0.3s ease, background 0.3s ease;
+  }
+  .stage:last-child { border-right: none; }
+  .stage.active { color: var(--paper); background: var(--brass-deep); }
+  html[data-theme="dark"] .stage.active { color: #0d1117; }
+  .stage.done { color: var(--ok); }
+
+  form { display: flex; flex-direction: column; gap: 8px; }
+
+  label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--slate);
+    font-family: 'Courier New', monospace;
+  }
+
+  .input-row {
+    display: flex;
+    border: 1px solid var(--ink);
+    background: var(--field-bg);
+    transition: var(--transition-theme);
+  }
+
+  input[type="url"] {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 15px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--ink);
+    outline: none;
+  }
+
+  input[type="url"]::placeholder { color: var(--slate); opacity: 0.6; }
+
+  button {
+    border: none;
+    border-left: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0 26px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.4s ease, color 0.4s ease;
+    white-space: nowrap;
+  }
+
+  button:hover:not(:disabled) { background: var(--brass-deep); color: var(--paper); }
+  html[data-theme="dark"] button:hover:not(:disabled) { color: #0d1117; }
+  button:disabled { cursor: default; opacity: 0.55; }
+
+  select {
+    border: 1px solid var(--ink);
+    background: var(--field-bg);
+    color: var(--ink);
+    padding: 13px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    transition: var(--transition-theme);
+  }
+
+  .status {
+    margin-top: 22px;
+    font-size: 14px;
+    line-height: 1.6;
+    display: none;
+    padding: 14px 16px;
+    border-left: 3px solid var(--slate);
+    background: rgba(0,0,0,0.02);
+  }
+  .status.show { display: block; }
+  .status.working { border-color: var(--brass); color: var(--brass-deep); }
+  .status.success { border-color: var(--ok); color: var(--ok); }
+  .status.error { border-color: var(--err); color: var(--err); }
+
+  .status .detail {
+    display: block;
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: var(--slate);
+    font-family: 'Courier New', monospace;
+  }
+
+  .footer-note {
+    margin-top: 30px;
+    font-size: 11.5px;
+    color: var(--slate);
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  .footer-note code {
+    background: var(--line);
+    color: var(--ink);
+    padding: 1px 5px;
+    border-radius: 2px;
+    transition: var(--transition-theme);
+  }
+
+  @media (max-width: 480px) {
+    .card { padding: 36px 24px 30px; }
+    h1 { font-size: 25px; }
+    .input-row { flex-direction: column; }
+    button { border-left: none; border-top: 1px solid var(--ink); padding: 14px; }
+    .theme-toggle { top: 14px; right: 14px; width: 40px; height: 40px; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="starfield"></div>
+
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+    <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></svg>
+  </button>
+
+  <div class="card">
+    <p class="eyebrow">Listing Intake — 01</p>
+    <h1>Send a listing,<br><em>get it back clean.</em></h1>
+    <p class="sub">Paste a link from PropertyFinder, Bayut, Dubizzle, Rightmove, or Zillow. The photos are pulled, watermarks removed, upscaled, and dropped into Drive automatically.</p>
+
+    <div class="stages">
+      <div class="stage" data-stage="submit">Submit</div>
+      <div class="stage" data-stage="fetch">Fetch</div>
+      <div class="stage" data-stage="clean">Clean</div>
+      <div class="stage" data-stage="drive">Drive</div>
+    </div>
+
+    <form id="listingForm">
+      <label for="url">Property listing URL</label>
+      <div class="input-row">
+        <input type="url" id="url" name="url" placeholder="https://www.propertyfinder.ae/en/plp/buy/apartment..." required>
+        <button type="submit" id="submitBtn">Run</button>
+      </div>
+
+      <label for="profile" style="margin-top: 18px;">Processing profile</label>
+      <select id="profile" name="profile">
+        <option value="fast">Fast</option>
+        <option value="balanced" selected>Balanced</option>
+        <option value="quality">Quality</option>
+      </select>
+    </form>
+
+    <div class="status" id="status"></div>
+
+    <p class="footer-note">Endpoint: <code id="endpointLabel">not configured</code></p>
+  </div>
+
+<script>
+  // ---------------------------------------------------------------
+  // CONFIGURE THIS: paste your n8n Production URL for the Form
+  // Trigger node below. It looks like:
+  // http://localhost:5678/form/5a8a571d-24f2-4f49-bedf-2a52625e71db
+  // The workflow must be toggled "Active" in n8n for this to work.
+  // ---------------------------------------------------------------
+  const N8N_WEBHOOK_URL = "http://localhost:5678/form/5a8a571d-24f2-4f49-bedf-2a52625e71db";
+  // n8n's Form Trigger does NOT use your display labels as the actual
+  // POST field names — it uses positional keys (field-0, field-1, ...)
+  // in the order fields were added in the builder. Confirmed via
+  // DevTools Network tab on the real n8n-hosted form.
+  const FIELD_NAME = "field-0";         // Property URL
+  const PROFILE_FIELD_NAME = "field-1"; // Processing Profile
+  // ---------------------------------------------------------------
+
+  const form = document.getElementById('listingForm');
+  const urlInput = document.getElementById('url');
+  const submitBtn = document.getElementById('submitBtn');
+  const statusEl = document.getElementById('status');
+  const endpointLabel = document.getElementById('endpointLabel');
+  const stages = document.querySelectorAll('.stage');
+
+  // -----------------------------------------------------------------
+  // Theme toggle (light / dark) with a hand-built starfield for dark mode
+  // -----------------------------------------------------------------
+  const SUN_PATH = 'M12 4V2M12 22v-2M4.93 4.93 3.51 3.51M20.49 20.49l-1.42-1.42M4 12H2M22 12h-2M4.93 19.07l-1.42 1.42M20.49 3.51l-1.42 1.42M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z';
+  const MOON_PATH = 'M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z';
+
+  const themeToggle = document.getElementById('themeToggle');
+  const themeIcon = document.getElementById('themeIcon');
+  const starfield = document.getElementById('starfield');
+  const root = document.documentElement;
+
+  function paintIcon(theme) {
+    themeIcon.innerHTML = `<path d="${theme === 'dark' ? MOON_PATH : SUN_PATH}"></path>` +
+      (theme === 'dark' ? '' : '<circle cx="12" cy="12" r="4.5"></circle>');
+  }
+
+  function buildStarfield() {
+    if (starfield.dataset.built) return;
+    starfield.dataset.built = '1';
+    const count = window.innerWidth < 480 ? 70 : 140;
+    for (let i = 0; i < count; i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      const size = (Math.random() * 1.8 + 0.5).toFixed(2);
+      s.style.width = size + 'px';
+      s.style.height = size + 'px';
+      s.style.left = Math.random() * 100 + '%';
+      s.style.top = Math.random() * 100 + '%';
+      s.style.setProperty('--dur', (2.5 + Math.random() * 4).toFixed(2) + 's');
+      s.style.setProperty('--delay', (Math.random() * 5).toFixed(2) + 's');
+      s.style.setProperty('--min-op', (Math.random() * 0.2).toFixed(2));
+      s.style.setProperty('--max-op', (0.6 + Math.random() * 0.4).toFixed(2));
+      starfield.appendChild(s);
+    }
+    // A couple of slow shooting stars for atmosphere
+    for (let i = 0; i < 2; i++) {
+      const sh = document.createElement('div');
+      sh.className = 'star shoot';
+      sh.style.width = (60 + Math.random() * 40) + 'px';
+      sh.style.left = Math.random() * 40 + '%';
+      sh.style.top = (Math.random() * 40) + '%';
+      sh.style.setProperty('--delay', (i * 5 + Math.random() * 6) + 's');
+      starfield.appendChild(sh);
+    }
+  }
+
+  function setTheme(theme, persist = true) {
+    root.setAttribute('data-theme', theme);
+    paintIcon(theme);
+    if (theme === 'dark') buildStarfield();
+    if (persist) {
+      try { localStorage.setItem('listing-processor-theme', theme); } catch (e) {}
+    }
+  }
+
+  let savedTheme = null;
+  try { savedTheme = localStorage.getItem('listing-processor-theme'); } catch (e) {}
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  setTheme(savedTheme || (prefersDark ? 'dark' : 'light'), false);
+
+  themeToggle.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+  });
+
+  endpointLabel.textContent = N8N_WEBHOOK_URL.startsWith('http')
+    ? new URL(N8N_WEBHOOK_URL).host
+    : 'not configured — edit index.html';
+
+  function setStage(name) {
+    let reached = true;
+    stages.forEach(s => {
+      s.classList.remove('active');
+      if (s.dataset.stage === name) { s.classList.add('active'); reached = false; }
+      else if (reached) s.classList.add('done');
+      else s.classList.remove('done');
+    });
+  }
+
+  function showStatus(kind, message, detail) {
+    statusEl.className = 'status show ' + kind;
+    statusEl.innerHTML = message + (detail ? `<span class="detail">${detail}</span>` : '');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    if (!N8N_WEBHOOK_URL || N8N_WEBHOOK_URL.startsWith('PASTE_')) {
+      showStatus('error', 'This page isn\u2019t wired up yet.', 'Open index.html and paste your n8n Production URL into N8N_WEBHOOK_URL.');
+      return;
+    }
+
+    const listingUrl = urlInput.value.trim();
+    const profileValue = document.getElementById('profile').value;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending…';
+    setStage('fetch');
+    showStatus('working', 'Sending listing to the pipeline…');
+
+    // Build a real HTML form and submit it natively (not via fetch) to
+    // avoid CORS issues that occur when this page is opened via file://
+    // and posts cross-origin to localhost.
+    const hiddenFrameName = 'n8n_submit_target';
+    let iframe = document.getElementById(hiddenFrameName);
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.name = hiddenFrameName;
+      iframe.id = hiddenFrameName;
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+    }
+
+    const realForm = document.createElement('form');
+    realForm.method = 'POST';
+    realForm.action = N8N_WEBHOOK_URL;
+    realForm.enctype = 'multipart/form-data';
+    realForm.target = hiddenFrameName;
+    realForm.style.display = 'none';
+
+    const urlField = document.createElement('input');
+    urlField.type = 'text';
+    urlField.name = FIELD_NAME;
+    urlField.value = listingUrl;
+    realForm.appendChild(urlField);
+
+    const profileField = document.createElement('input');
+    profileField.type = 'text';
+    profileField.name = PROFILE_FIELD_NAME;
+    profileField.value = profileValue;
+    realForm.appendChild(profileField);
+
+    document.body.appendChild(realForm);
+    realForm.submit();
+
+    // We can't read the iframe's response (also blocked cross-origin),
+    // so just confirm the submission was fired.
+    setTimeout(() => {
+      setStage('drive');
+      showStatus('success', 'Sent. The workflow is now cleaning and uploading the photos.', 'Check n8n\u2019s Executions tab or your Google Drive folder in a minute or two.');
+      stages.forEach(s => s.classList.add('done'));
+      stages.forEach(s => s.classList.remove('active'));
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Run';
+      document.body.removeChild(realForm);
+    }, 1200);
+  });
+</script>
+
+</body>
+</html>
